@@ -25,48 +25,18 @@ class State extends \Magento\Framework\Model\AbstractModel implements \Magento\F
     protected $_eventObject = 'mview_state';
 
     /**
-     * @var \Magento\Framework\Lock\LockManagerInterface
-     */
-    private $lockManager;
-
-    /**
-     * Prefix for lock mechanism
-     *
-     * @var string
-     */
-    private $lockPrefix = 'MVIEW';
-
-    /**
-     * DeploymentConfig
-     *
-     * @var \Magento\Framework\App\DeploymentConfig
-     */
-    private $configReader;
-
-    /**
-     * Parameter with path to indexer use_application_lock config
-     *
-     * @var string
-     */
-    private $useApplicationLockConfig = 'indexer/use_application_lock';
-
-    /**
      * @param \Magento\Framework\Model\Context $context
      * @param \Magento\Framework\Registry $registry
      * @param \Magento\Indexer\Model\ResourceModel\Mview\View\State $resource
      * @param \Magento\Indexer\Model\ResourceModel\Mview\View\State\Collection $resourceCollection
      * @param array $data
-     * @param \Magento\Framework\Lock\LockManagerInterface $lockManager
-     * @param \Magento\Framework\App\DeploymentConfig $configReader
      */
     public function __construct(
         \Magento\Framework\Model\Context $context,
         \Magento\Framework\Registry $registry,
         \Magento\Indexer\Model\ResourceModel\Mview\View\State $resource,
         \Magento\Indexer\Model\ResourceModel\Mview\View\State\Collection $resourceCollection,
-        array $data = [],
-        \Magento\Framework\Lock\LockManagerInterface $lockManager = null,
-        \Magento\Framework\App\DeploymentConfig $configReader = null
+        array $data = []
     ) {
         if (!isset($data['mode'])) {
             $data['mode'] = self::MODE_DISABLED;
@@ -74,12 +44,6 @@ class State extends \Magento\Framework\Model\AbstractModel implements \Magento\F
         if (!isset($data['status'])) {
             $data['status'] = self::STATUS_IDLE;
         }
-        $this->lockManager = $lockManager ?: \Magento\Framework\App\ObjectManager::getInstance()->get(
-            \Magento\Framework\Lock\LockManagerInterface::class
-        );
-        $this->configReader = $configReader ?: \Magento\Framework\App\ObjectManager::getInstance()->get(
-            \Magento\Framework\App\DeploymentConfig::class
-        );
         parent::__construct($context, $registry, $resource, $resourceCollection, $data);
     }
 
@@ -148,17 +112,7 @@ class State extends \Magento\Framework\Model\AbstractModel implements \Magento\F
      */
     public function getStatus()
     {
-        $status = $this->getData('status');
-        if ($this->isUseApplicationLock()) {
-            if (
-                $status == \Magento\Framework\Mview\View\StateInterface::STATUS_WORKING &&
-                !$this->lockManager->isLocked($this->lockPrefix . $this->getViewId())
-            ) {
-                return \Magento\Framework\Mview\View\StateInterface::STATUS_IDLE;
-            }
-        }
-
-        return $status;
+        return $this->getData('status');
     }
 
     /**
@@ -169,13 +123,6 @@ class State extends \Magento\Framework\Model\AbstractModel implements \Magento\F
      */
     public function setStatus($status)
     {
-        if ($this->isUseApplicationLock()) {
-            if ($status == \Magento\Framework\Mview\View\StateInterface::STATUS_WORKING) {
-                $this->lockManager->lock($this->lockPrefix . $this->getViewId());
-            } else {
-                $this->lockManager->unlock($this->lockPrefix . $this->getViewId());
-            }
-        }
         $this->setData('status', $status);
         return $this;
     }
@@ -222,15 +169,5 @@ class State extends \Magento\Framework\Model\AbstractModel implements \Magento\F
     {
         $this->setData('version_id', $versionId);
         return $this;
-    }
-
-    /**
-     * The indexer application locking mechanism is used
-     *
-     * @return bool
-     */
-    private function isUseApplicationLock()
-    {
-        return $this->configReader->get($this->useApplicationLockConfig) ?: false;
     }
 }

@@ -28,11 +28,6 @@ class Indexer implements \Magento\Framework\AppInterface
     protected $_response;
 
     /**
-     * @var \Magento\Indexer\Model\Processor
-     */
-    private $processor;
-
-    /**
      * @param string $reportDir
      * @param \Magento\Framework\Filesystem $filesystem
      * @param \Magento\Indexer\Model\Processor $processor

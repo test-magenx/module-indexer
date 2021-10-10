@@ -422,6 +422,27 @@ class IndexerReindexCommandTest extends AbstractIndexerCommandCommonSetup
         ];
     }
 
+    public function testExecuteWithLocalizedException()
+    {
+        $this->configureAdminArea();
+        $indexerOne = $this->getIndexerMock(
+            ['reindexAll', 'getStatus'],
+            ['indexer_id' => 'indexer_1', 'title' => self::STUB_INDEXER_NAME]
+        );
+        $localizedException = new LocalizedException(new Phrase('Some Exception Message'));
+        $indexerOne->expects($this->once())->method('reindexAll')->willThrowException($localizedException);
+        $this->initIndexerCollectionByItems([$indexerOne]);
+        $this->command = new IndexerReindexCommand($this->objectManagerFactory);
+        $commandTester = new CommandTester($this->command);
+        $commandTester->execute(['index' => ['indexer_1']]);
+        $actualValue = $commandTester->getDisplay();
+        $this->assertSame(Cli::RETURN_FAILURE, $commandTester->getStatusCode());
+        $this->assertStringStartsWith(
+            self::STUB_INDEXER_NAME . ' index exception: Some Exception Message',
+            $actualValue
+        );
+    }
+
     public function testExecuteWithException()
     {
         $this->configureAdminArea();
@@ -438,10 +459,7 @@ class IndexerReindexCommandTest extends AbstractIndexerCommandCommonSetup
         $commandTester->execute(['index' => ['indexer_1']]);
         $actualValue = $commandTester->getDisplay();
         $this->assertSame(Cli::RETURN_FAILURE, $commandTester->getStatusCode());
-        $this->assertStringStartsWith(
-            'Title_indexer_1' . ' index process error during indexation process:',
-            $actualValue
-        );
+        $this->assertStringStartsWith('Title_indexer_1' . ' index process unknown error:', $actualValue);
     }
 
     public function testExecuteWithExceptionInGetIndexers()
