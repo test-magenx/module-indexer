@@ -7,7 +7,10 @@ declare(strict_types=1);
 
 namespace Magento\Indexer\Model\Indexer;
 
+use Magento\Framework\App\CacheInterface;
+use Magento\Framework\Event\Manager as EventManager;
 use Magento\Framework\Indexer\ActionInterface;
+use Magento\Framework\Indexer\CacheContext;
 
 /**
  * Clean cache for reindexed entities after executed action.
@@ -15,33 +18,37 @@ use Magento\Framework\Indexer\ActionInterface;
 class CacheCleaner
 {
     /**
-     * @var DeferredCacheCleaner
+     * @var EventManager
      */
-    private $cacheCleaner;
+    private $eventManager;
 
     /**
-     * @param DeferredCacheCleaner $cacheCleaner
+     * @var CacheContext
+     */
+    private $cacheContext;
+
+    /**
+     * @var CacheInterface
+     */
+    private $appCache;
+
+    /**
+     * @param EventManager $eventManager
+     * @param CacheContext $cacheContext
+     * @param CacheInterface $appCache
      */
     public function __construct(
-        DeferredCacheCleaner $cacheCleaner
+        EventManager $eventManager,
+        CacheContext $cacheContext,
+        CacheInterface $appCache
     ) {
-        $this->cacheCleaner = $cacheCleaner;
+        $this->eventManager = $eventManager;
+        $this->cacheContext = $cacheContext;
+        $this->appCache = $appCache;
     }
 
     /**
-     * Defer cache cleaning until after execute full
-     *
-     * @param ActionInterface $subject
-     * @return void
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
-     */
-    public function beforeExecuteFull(ActionInterface $subject)
-    {
-        $this->cacheCleaner->start();
-    }
-
-    /**
-     * Clean cache after full reindex full
+     * Clean cache after full reindex.
      *
      * @param ActionInterface $subject
      * @return void
@@ -49,19 +56,7 @@ class CacheCleaner
      */
     public function afterExecuteFull(ActionInterface $subject)
     {
-        $this->cacheCleaner->flush();
-    }
-
-    /**
-     * Defer cache cleaning until after execute list
-     *
-     * @param ActionInterface $subject
-     * @return void
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
-     */
-    public function beforeExecuteList(ActionInterface $subject)
-    {
-        $this->cacheCleaner->start();
+        $this->cleanCache();
     }
 
     /**
@@ -73,19 +68,7 @@ class CacheCleaner
      */
     public function afterExecuteList(ActionInterface $subject)
     {
-        $this->cacheCleaner->flush();
-    }
-
-    /**
-     * Defer cache cleaning until after execute row
-     *
-     * @param ActionInterface $subject
-     * @return void
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
-     */
-    public function beforeExecuteRow(ActionInterface $subject)
-    {
-        $this->cacheCleaner->start();
+        $this->cleanCache();
     }
 
     /**
@@ -97,6 +80,22 @@ class CacheCleaner
      */
     public function afterExecuteRow(ActionInterface $subject)
     {
-        $this->cacheCleaner->flush();
+        $this->cleanCache();
+    }
+
+    /**
+     * Clean cache.
+     *
+     * @return void
+     */
+    private function cleanCache()
+    {
+        $this->eventManager->dispatch('clean_cache_by_tags', ['object' => $this->cacheContext]);
+
+        $identities = $this->cacheContext->getIdentities();
+        if (!empty($identities)) {
+            $this->appCache->clean($identities);
+            $this->cacheContext->flush();
+        }
     }
 }

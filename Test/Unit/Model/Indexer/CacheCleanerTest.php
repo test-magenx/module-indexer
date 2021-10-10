@@ -7,9 +7,11 @@ declare(strict_types=1);
 
 namespace Magento\Indexer\Test\Unit\Model\Indexer;
 
+use Magento\Framework\App\CacheInterface;
+use Magento\Framework\Event\Manager;
 use Magento\Framework\Indexer\ActionInterface;
+use Magento\Framework\Indexer\CacheContext;
 use Magento\Indexer\Model\Indexer\CacheCleaner;
-use Magento\Indexer\Model\Indexer\DeferredCacheCleaner;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
@@ -19,19 +21,25 @@ use PHPUnit\Framework\TestCase;
 class CacheCleanerTest extends TestCase
 {
     /**
+     * @var Manager|MockObject
+     */
+    private $eventManager;
+    /**
+     * @var CacheContext|MockObject
+     */
+    private $cacheContext;
+    /**
+     * @var CacheInterface|MockObject
+     */
+    private $cache;
+    /**
      * @var CacheCleaner
      */
     private $model;
-
     /**
      * @var ActionInterface|MockObject
      */
     private $action;
-
-    /**
-     * @var DeferredCacheCleaner|MockObject
-     */
-    private $cacheCleaner;
 
     /**
      * @inheritDoc
@@ -40,67 +48,82 @@ class CacheCleanerTest extends TestCase
     {
         parent::setUp();
         $this->action = $this->getMockForAbstractClass(ActionInterface::class);
-        $this->cacheCleaner = $this->createMock(DeferredCacheCleaner::class);
-        $this->model = new CacheCleaner($this->cacheCleaner);
+        $this->cacheContext = $this->createMock(CacheContext::class);
+        $this->eventManager = $this->createMock(Manager::class);
+        $this->cache = $this->getMockForAbstractClass(CacheInterface::class);
+        $this->model = new CacheCleaner(
+            $this->eventManager,
+            $this->cacheContext,
+            $this->cache
+        );
     }
 
     /**
-     * Test beforeExecuteFull()
+     * @param array $tags
+     * @param bool $isCacheClean
+     * @dataProvider cacheTagsDataProvider
      */
-    public function testBeforeExecuteFull(): void
+    public function testAfterExecuteFull(array $tags, bool $isCacheClean = true): void
     {
-        $this->cacheCleaner->expects($this->once())
-            ->method('start');
-        $this->model->beforeExecuteFull($this->action);
-    }
-
-    /**
-     * Test afterExecuteFull()
-     */
-    public function testAfterExecuteFull(): void
-    {
-        $this->cacheCleaner->expects($this->once())
-            ->method('flush');
+        $this->expectCacheClean($tags, $isCacheClean);
         $this->model->afterExecuteFull($this->action);
     }
 
     /**
-     * Test beforeExecuteList()
+     * @param array $tags
+     * @param bool $isCacheClean
+     * @dataProvider cacheTagsDataProvider
      */
-    public function testBeforeExecuteList(): void
+    public function testAfterExecuteList(array $tags, bool $isCacheClean = true): void
     {
-        $this->cacheCleaner->expects($this->once())
-            ->method('start');
-        $this->model->beforeExecuteList($this->action);
-    }
-
-    /**
-     * Test afterExecuteList()
-     */
-    public function testAfterExecuteList(): void
-    {
-        $this->cacheCleaner->expects($this->once())
-            ->method('flush');
+        $this->expectCacheClean($tags, $isCacheClean);
         $this->model->afterExecuteList($this->action);
     }
 
     /**
-     * Test beforeExecuteRow()
+     * @param array $tags
+     * @param bool $isCacheClean
+     * @dataProvider cacheTagsDataProvider
      */
-    public function testBeforeExecuteRow(): void
+    public function testAfterExecuteRow(array $tags, bool $isCacheClean = true): void
     {
-        $this->cacheCleaner->expects($this->once())
-            ->method('start');
-        $this->model->beforeExecuteRow($this->action);
+        $this->expectCacheClean($tags, $isCacheClean);
+        $this->model->afterExecuteRow($this->action);
     }
 
     /**
-     * Test afterExecuteRow()
+     * @return array[]
      */
-    public function testAfterExecuteRow(): void
+    public function cacheTagsDataProvider(): array
     {
-        $this->cacheCleaner->expects($this->once())
+        return [
+            [[], false],
+            [['cat_c_1', 'cat_c_2'], true]
+        ];
+    }
+
+    /**
+     * @param array $tags
+     * @param bool $isCacheClean
+     */
+    private function expectCacheClean(array $tags, bool $isCacheClean = true): void
+    {
+        $this->eventManager->expects($this->once())
+            ->method('dispatch')
+            ->with(
+                'clean_cache_by_tags',
+                ['object' => $this->cacheContext]
+            );
+
+        $this->cacheContext->expects($this->atLeastOnce())
+            ->method('getIdentities')
+            ->willReturn($tags);
+
+        $this->cache->expects($this->exactly($isCacheClean ? 1 : 0))
+            ->method('clean')
+            ->with($tags);
+
+        $this->cacheContext->expects($this->exactly($isCacheClean ? 1 : 0))
             ->method('flush');
-        $this->model->afterExecuteRow($this->action);
     }
 }

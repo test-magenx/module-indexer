@@ -48,9 +48,6 @@ class ProcessorTest extends TestCase
      */
     protected $viewProcessorMock;
 
-    /**
-     * @inheritDoc
-     */
     protected function setUp(): void
     {
         $this->configMock = $this->getMockForAbstractClass(
@@ -131,21 +128,18 @@ class ProcessorTest extends TestCase
         $indexer2Mock->expects($this->never())->method('reindexAll');
         $indexer2Mock->expects($this->once())->method('getState')->willReturn($state2Mock);
 
-        $this->indexerFactoryMock
-            ->method('create')
-            ->willReturnOnConsecutiveCalls($indexer1Mock, $indexer2Mock);
+        $this->indexerFactoryMock->expects($this->at(0))->method('create')->willReturn($indexer1Mock);
+        $this->indexerFactoryMock->expects($this->at(1))->method('create')->willReturn($indexer2Mock);
 
         $this->model->reindexAllInvalid();
     }
 
     /**
+     * @dataProvider sharedIndexDataProvider
      * @param array $indexers
      * @param array $indexerStates
      * @param array $expectedReindexAllCalls
      * @param array $executedSharedIndexers
-     *
-     * @return void
-     * @dataProvider sharedIndexDataProvider
      */
     public function testReindexAllInvalidWithSharedIndex(
         array $indexers,
@@ -173,12 +167,13 @@ class ProcessorTest extends TestCase
             $indexerMock = $this->createPartialMock(Indexer::class, ['load', 'getState', 'reindexAll']);
             $indexerMock->expects($this->any())->method('getState')->willReturn($stateMock);
             $indexerMock->expects($expectedReindexAllCalls[$indexerData['indexer_id']])->method('reindexAll');
+
+            $this->indexerFactoryMock->expects($this->at(count($indexerMocks)))
+                ->method('create')
+                ->willReturn($indexerMock);
+
             $indexerMocks[] = $indexerMock;
         }
-        $this->indexerFactoryMock
-            ->method('create')
-            ->willReturnOnConsecutiveCalls(...$indexerMocks);
-
         $indexerRegistryMock = $this->getIndexRegistryMock($executedSharedIndexers);
 
         $makeSharedValidMock = new MakeSharedIndexValid(
@@ -196,9 +191,9 @@ class ProcessorTest extends TestCase
     }
 
     /**
-     * Reindex all test.
+     * Reindex all test
      *
-     * @return void
+     * return void
      */
     public function testReindexAll(): void
     {
@@ -214,22 +209,22 @@ class ProcessorTest extends TestCase
     }
 
     /**
-     * Update mview test.
+     * Update mview test
      *
      * @return void
      */
-    public function testUpdateMview(): void
+    public function testUpdateMview()
     {
         $this->viewProcessorMock->expects($this->once())->method('update')->with('indexer')->willReturnSelf();
         $this->model->updateMview();
     }
 
     /**
-     * Clear change log test.
+     * Clear change log test
      *
      * @return void
      */
-    public function testClearChangelog(): void
+    public function testClearChangelog()
     {
         $this->viewProcessorMock->expects($this->once())->method('clearChangelog')->with('indexer')->willReturnSelf();
         $this->model->clearChangelog();
@@ -238,7 +233,7 @@ class ProcessorTest extends TestCase
     /**
      * @return array
      */
-    public function sharedIndexDataProvider(): array
+    public function sharedIndexDataProvider()
     {
         return [
             'Without dependencies' => [
@@ -247,32 +242,32 @@ class ProcessorTest extends TestCase
                         'indexer_id' => 'indexer_1',
                         'title' => 'Title_indexer_1',
                         'shared_index' => null,
-                        'dependencies' => []
+                        'dependencies' => [],
                     ],
                     'indexer_2' => [
                         'indexer_id' => 'indexer_2',
                         'title' => 'Title_indexer_2',
                         'shared_index' => 'with_indexer_3',
-                        'dependencies' => []
+                        'dependencies' => [],
                     ],
                     'indexer_3' => [
                         'indexer_id' => 'indexer_3',
                         'title' => 'Title_indexer_3',
                         'shared_index' => 'with_indexer_3',
-                        'dependencies' => []
+                        'dependencies' => [],
                     ],
                 ],
                 'indexer_states' => [
                     'indexer_1' => StateInterface::STATUS_INVALID,
                     'indexer_2' => StateInterface::STATUS_VALID,
-                    'indexer_3' => StateInterface::STATUS_VALID
+                    'indexer_3' => StateInterface::STATUS_VALID,
                 ],
                 'expected_reindex_all_calls' => [
                     'indexer_1' => $this->once(),
                     'indexer_2' => $this->never(),
-                    'indexer_3' => $this->never()
+                    'indexer_3' => $this->never(),
                 ],
-                'executed_shared_indexers' => []
+                'executed_shared_indexers' => [],
             ],
             'With dependencies and some indexers is invalid' => [
                 'indexers' => [
@@ -280,50 +275,49 @@ class ProcessorTest extends TestCase
                         'indexer_id' => 'indexer_1',
                         'title' => 'Title_indexer_1',
                         'shared_index' => null,
-                        'dependencies' => ['indexer_2', 'indexer_3']
+                        'dependencies' => ['indexer_2', 'indexer_3'],
                     ],
                     'indexer_2' => [
                         'indexer_id' => 'indexer_2',
                         'title' => 'Title_indexer_2',
                         'shared_index' => 'with_indexer_3',
-                        'dependencies' => []
+                        'dependencies' => [],
                     ],
                     'indexer_3' => [
                         'indexer_id' => 'indexer_3',
                         'title' => 'Title_indexer_3',
                         'shared_index' => 'with_indexer_3',
-                        'dependencies' => []
+                        'dependencies' => [],
                     ],
                     'indexer_4' => [
                         'indexer_id' => 'indexer_4',
                         'title' => 'Title_indexer_4',
                         'shared_index' => null,
-                        'dependencies' => ['indexer_1']
-                    ]
+                        'dependencies' => ['indexer_1'],
+                    ],
                 ],
                 'indexer_states' => [
                     'indexer_1' => StateInterface::STATUS_INVALID,
                     'indexer_2' => StateInterface::STATUS_VALID,
                     'indexer_3' => StateInterface::STATUS_INVALID,
-                    'indexer_4' => StateInterface::STATUS_VALID
+                    'indexer_4' => StateInterface::STATUS_VALID,
                 ],
                 'expected_reindex_all_calls' => [
                     'indexer_1' => $this->once(),
                     'indexer_2' => $this->never(),
                     'indexer_3' => $this->once(),
-                    'indexer_4' => $this->never()
+                    'indexer_4' => $this->never(),
                 ],
-                'executed_shared_indexers' => [['indexer_2'], ['indexer_3']]
-            ]
+                'executed_shared_indexers' => [['indexer_2'], ['indexer_3']],
+            ],
         ];
     }
 
     /**
      * @param array $executedSharedIndexers
-     *
      * @return IndexerRegistry|MockObject
      */
-    private function getIndexRegistryMock(array $executedSharedIndexers): MockObject
+    private function getIndexRegistryMock(array $executedSharedIndexers)
     {
         /** @var MockObject|IndexerRegistry $indexerRegistryMock */
         $indexerRegistryMock = $this->getMockBuilder(IndexerRegistry::class)
@@ -332,8 +326,7 @@ class ProcessorTest extends TestCase
         $emptyIndexer = $this->createPartialMock(Indexer::class, ['load', 'getState', 'reindexAll']);
         /** @var MockObject|StateInterface $state */
         $state = $this->getMockBuilder(StateInterface::class)
-            ->onlyMethods(['setStatus'])
-            ->addMethods(['save'])
+            ->setMethods(['setStatus', 'save'])
             ->disableOriginalConstructor()
             ->getMockForAbstractClass();
         $state->method('getStatus')
